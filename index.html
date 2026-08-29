@@ -1,0 +1,157 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="theme-color" content="#0f1117" />
+  <title>Scribble Imposter</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <div class="app-shell">
+    <header class="topbar">
+      <div>
+        <div class="eyebrow">ONLINE PARTY GAME</div>
+        <h1>✏️ Scribble Imposter</h1>
+      </div>
+      <div id="connectionBadge" class="badge">Nicht verbunden</div>
+    </header>
+
+    <main>
+      <section id="homeView" class="view active">
+        <div class="hero-card">
+          <div class="hero-copy">
+            <span class="pill">3+ Spieler · 3 Zeichenrunden</span>
+            <h2>Einer kennt das Wort nicht.</h2>
+            <p>Alle zeichnen dieselbe Idee Linie für Linie. Der Imposter kennt nur die Kategorie und muss unauffällig mitzeichnen.</p>
+          </div>
+
+          <div class="home-grid">
+            <form id="createForm" class="action-card">
+              <h3>Raum erstellen</h3>
+              <label for="createName">Dein Name</label>
+              <input id="createName" maxlength="24" autocomplete="nickname" placeholder="z. B. Sievi" required />
+              <button type="submit">Raum erstellen</button>
+            </form>
+
+            <form id="joinForm" class="action-card">
+              <h3>Raum beitreten</h3>
+              <label for="joinName">Dein Name</label>
+              <input id="joinName" maxlength="24" autocomplete="nickname" placeholder="z. B. Luca" required />
+              <label for="joinCode">Raumcode</label>
+              <input id="joinCode" maxlength="6" autocomplete="off" placeholder="A1B2C3" class="code-input" required />
+              <button type="submit" class="secondary">Beitreten</button>
+            </form>
+          </div>
+          <p id="homeError" class="message error hidden"></p>
+        </div>
+      </section>
+
+      <section id="roomView" class="view">
+        <div class="room-head">
+          <div>
+            <div class="eyebrow">RAUM</div>
+            <div class="room-code-row">
+              <h2 id="roomCode">------</h2>
+              <button id="copyCode" class="ghost small" type="button">Code kopieren</button>
+            </div>
+          </div>
+          <div class="round-chip" id="roundChip">Lobby</div>
+        </div>
+
+        <div class="game-layout">
+          <aside class="side-panel">
+            <h3>Spieler</h3>
+            <div id="playerList" class="player-list"></div>
+            <button id="startButton" type="button" class="hidden">Spiel starten</button>
+            <button id="restartButton" type="button" class="hidden">Neue Runde</button>
+            <p id="hostHint" class="muted"></p>
+          </aside>
+
+          <section class="stage-panel">
+            <div id="lobbyStage" class="stage active">
+              <div class="center-stage">
+                <div class="big-icon">🎨</div>
+                <h2>Warten auf Spieler</h2>
+                <p>Teile den Raumcode mit deinen Freunden. Ab 3 Spielern kann der Host starten.</p>
+              </div>
+            </div>
+
+            <div id="drawingStage" class="stage">
+              <div class="secret-card" id="secretCard">
+                <div>
+                  <span class="eyebrow">DEINE INFO</span>
+                  <div id="secretMain" class="secret-main">Lade Rolle…</div>
+                  <div id="secretSub" class="muted"></div>
+                </div>
+                <button id="toggleSecret" class="ghost small" type="button">Verbergen</button>
+              </div>
+
+              <div class="turn-banner">
+                <div>
+                  <span id="roundLabel">Runde 1 / 3</span>
+                  <strong id="turnLabel">… zeichnet</strong>
+                </div>
+                <span id="categoryLabel" class="pill">Kategorie</span>
+              </div>
+
+              <div class="canvas-wrap">
+                <canvas id="canvas" width="1000" height="700"></canvas>
+                <div id="canvasLock" class="canvas-lock">
+                  <div>
+                    <strong id="lockTitle">Warte auf deinen Zug</strong>
+                    <span id="lockSub">Du kannst die Zeichnung live verfolgen.</span>
+                  </div>
+                </div>
+              </div>
+              <div class="draw-actions">
+                <span id="drawHint" class="muted">Pro Zug genau eine durchgehende Linie.</span>
+                <button id="submitLine" type="button" disabled>Linie abschicken</button>
+              </div>
+            </div>
+
+            <div id="votingStage" class="stage">
+              <div class="center-head">
+                <span class="eyebrow">ABSTIMMUNG</span>
+                <h2>Wer ist der Imposter?</h2>
+                <p>Jeder stimmt auf seinem eigenen Gerät ab. Du kannst dich nicht selbst wählen.</p>
+              </div>
+              <div id="voteGrid" class="vote-grid"></div>
+              <button id="voteButton" type="button" disabled>Stimme abgeben</button>
+              <p id="voteStatus" class="muted"></p>
+            </div>
+
+            <div id="guessStage" class="stage">
+              <div class="center-stage">
+                <div class="big-icon">😈</div>
+                <h2>Imposter entlarvt</h2>
+                <p id="guessInfo">Der Imposter hat noch eine letzte Chance.</p>
+                <form id="guessForm" class="guess-form hidden">
+                  <label for="guessInput">Welches Wort wurde gezeichnet?</label>
+                  <input id="guessInput" autocomplete="off" placeholder="Deine Antwort" />
+                  <button type="submit">Wort raten</button>
+                </form>
+                <p id="guessWaiting" class="muted hidden">Der Imposter überlegt gerade …</p>
+              </div>
+            </div>
+
+            <div id="resultStage" class="stage">
+              <div class="center-stage">
+                <div id="resultIcon" class="big-icon">🏁</div>
+                <span class="eyebrow">ERGEBNIS</span>
+                <h2 id="resultTitle">Spiel beendet</h2>
+                <p id="resultText"></p>
+              </div>
+            </div>
+          </section>
+        </div>
+        <p id="roomError" class="message error hidden"></p>
+      </section>
+    </main>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="config.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
