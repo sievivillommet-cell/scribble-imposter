@@ -114,11 +114,13 @@
     if (error) throw error;
     state.room = data;
   }
-  async function loadPlayers(roomId=state.room.id) {
-    const { data, error } = await state.client.from('players').select('*').eq('room_id',roomId).order('seat');
-    if (error) throw error;
-    state.players = data || [];
-  }
+ async function loadPlayers(roomId=state.room.id) {
+  const { data, error } = await state.client.rpc('get_room_players', {
+    p_room_id: roomId
+  });
+  if (error) throw error;
+  state.players = data || [];
+}
   async function loadStrokes(roomId=state.room.id) {
     const { data, error } = await state.client.from('strokes').select('*').eq('room_id',roomId).order('created_at');
     if (error) throw error;
