@@ -114,13 +114,11 @@
     if (error) throw error;
     state.room = data;
   }
- async function loadPlayers(roomId=state.room.id) {
-  const { data, error } = await state.client.rpc('get_room_players', {
-    p_room_id: roomId
-  });
-  if (error) throw error;
-  state.players = data || [];
-}
+  async function loadPlayers(roomId=state.room.id) {
+    const { data, error } = await state.client.rpc('get_room_players', { p_room_id: roomId });
+    if (error) throw error;
+    state.players = data || [];
+  }
   async function loadStrokes(roomId=state.room.id) {
     const { data, error } = await state.client.from('strokes').select('*').eq('room_id',roomId).order('created_at');
     if (error) throw error;
@@ -154,7 +152,7 @@
       })
       .on('broadcast',{event:'drawing'}, ({payload}) => {
         if (!payload || payload.user_id === state.user.id) return;
-        state.remoteDraft = Array.isArray(payload.points) ? payload.points : null;
+        state.remoteDraft = Array.isArray(payload.points) ? { points: payload.points, user_id: payload.user_id } : null;
         redrawCanvas();
       })
       .on('broadcast',{event:'drawing_end'}, () => { state.remoteDraft = null; redrawCanvas(); })
@@ -175,6 +173,15 @@
   function isHost() { return state.room?.host_user_id === state.user?.id; }
   function isMyTurn() { return state.room?.status === 'drawing' && activePlayer()?.user_id === state.user?.id; }
 
+  const PLAYER_COLORS = ['#4f8cff','#35d6a6','#ffb85c','#a970ff','#ff6fb1','#32c7d9'];
+  function playerColor(playerOrUserId) {
+    const player = typeof playerOrUserId === 'string'
+      ? state.players.find(p => p.user_id === playerOrUserId)
+      : playerOrUserId;
+    const seat = Number(player?.seat ?? 0);
+    return PLAYER_COLORS[((seat % PLAYER_COLORS.length) + PLAYER_COLORS.length) % PLAYER_COLORS.length];
+  }
+
   function renderAll() {
     if (!state.room) return;
     $('roomCode').textContent = state.room.code;
@@ -185,14 +192,17 @@
 
   function renderPlayers() {
     const active = activePlayer()?.user_id;
-    $('playerList').innerHTML = state.players.map(p => `
-      <div class="player ${active===p.user_id && state.room.status==='drawing'?'active':''}">
-        <span class="player-name">${escapeHtml(p.name)}</span>
+    $('playerList').innerHTML = state.players.map(p => {
+      const color = playerColor(p);
+      return `
+      <div class="player ${active===p.user_id && state.room.status==='drawing'?'active':''}" style="--player-color:${color}">
+        <span class="player-name-wrap"><span class="player-color-dot" aria-hidden="true"></span><span class="player-name">${escapeHtml(p.name)}</span></span>
         <span class="player-tags">
           ${p.is_host?'<span class="mini-tag">HOST</span>':''}
           ${p.user_id===state.user.id?'<span class="mini-tag you">DU</span>':''}
         </span>
-      </div>`).join('');
+      </div>`;
+    }).join('');
     $('startButton').classList.toggle('hidden', !(state.room.status==='lobby' && isHost()));
     $('startButton').disabled = state.players.length < 3;
     $('restartButton').classList.toggle('hidden', !(state.room.status==='result' && isHost()));
@@ -229,6 +239,7 @@
     const active = activePlayer();
     $('roundLabel').textContent=`Runde ${state.room.round_no} / 3`;
     $('turnLabel').textContent=active ? `${active.name} zeichnet` : 'Zug wird geladen…';
+    $('turnLabel').style.color = active ? playerColor(active) : '';
     $('categoryLabel').textContent=state.room.category || state.secret?.category || 'Kategorie';
     const mine=isMyTurn();
     $('canvasLock').classList.toggle('hidden', mine);
@@ -330,9 +341,17 @@
 
   function redrawCanvas() {
     const c=$('canvas'),ctx=c.getContext('2d'); if(!ctx)return;
-    ctx.clearRect(0,0,c.width,c.height);ctx.lineWidth=6;ctx.lineCap='round';ctx.lineJoin='round';ctx.strokeStyle='#111827';
-    const draw=points=>{if(!Array.isArray(points)||points.length<2)return;ctx.beginPath();points.forEach((p,i)=>i?ctx.lineTo(Number(p.x),Number(p.y)):ctx.moveTo(Number(p.x),Number(p.y)));ctx.stroke();};
-    state.strokes.forEach(s=>draw(s.points)); if(state.remoteDraft)draw(state.remoteDraft); if(state.draftPoints.length)draw(state.draftPoints);
+    ctx.clearRect(0,0,c.width,c.height);ctx.lineWidth=6;ctx.lineCap='round';ctx.lineJoin='round';
+    const draw=(points,color)=>{
+      if(!Array.isArray(points)||points.length<2)return;
+      ctx.strokeStyle=color || '#111827';
+      ctx.beginPath();
+      points.forEach((p,i)=>i?ctx.lineTo(Number(p.x),Number(p.y)):ctx.moveTo(Number(p.x),Number(p.y)));
+      ctx.stroke();
+    };
+    state.strokes.forEach(s=>draw(s.points,playerColor(s.player_user_id)));
+    if(state.remoteDraft) draw(state.remoteDraft.points,playerColor(state.remoteDraft.user_id));
+    if(state.draftPoints.length) draw(state.draftPoints,playerColor(me()));
   }
 
   function escapeHtml(s=''){return String(s).replace(/[&<>'"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[c]));}
