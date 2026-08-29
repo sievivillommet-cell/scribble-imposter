@@ -94,7 +94,7 @@
       if (error) throw error;
       const row = data?.[0];
       if (!row) throw new Error('Raum konnte nicht betreten werden.');
-      await enterRoom(row.room_id);
+      await enterRoom(row.result_room_id);
     } catch (err) { setError('homeError', friendlyError(err)); }
   }
 
