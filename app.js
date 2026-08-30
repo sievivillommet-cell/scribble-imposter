@@ -66,8 +66,11 @@
     $('copyCode').addEventListener('click', copyCode);
     $('toggleSecret').addEventListener('click', toggleSecret);
     $('submitLine').addEventListener('click', submitLine);
+    $('redrawLine').addEventListener('click', resetDraft);
     $('voteButton').addEventListener('click', castVote);
     $('guessForm').addEventListener('submit', submitGuess);
+    $('guessBoxes').addEventListener('click', () => $('guessInput').focus());
+    $('guessInput').addEventListener('input', syncGuessBoxes);
     wireCanvas();
   }
 
@@ -162,6 +165,7 @@
   async function syncAfterRoomChange() {
     state.draftPoints=[]; state.draftReady=false; state.drawing=false; state.remoteDraft=null;
     $('submitLine').disabled = true;
+    $('redrawLine').disabled = true;
     await loadPlayers();
     if (state.room.status !== 'lobby' && !state.secret) await loadSecret();
     if (state.room.status === 'lobby') { state.secret=null; state.voted=false; state.selectedVote=null; }
@@ -247,6 +251,7 @@
     $('lockSub').textContent = 'Du kannst die Zeichnung live verfolgen.';
     $('drawHint').textContent = mine ? (state.draftReady?'Linie fertig – jetzt abschicken.':'Du bist dran: genau eine durchgehende Linie.') : 'Warte auf deinen Zug.';
     $('submitLine').disabled = !(mine && state.draftReady);
+    $('redrawLine').disabled = !(mine && state.draftReady);
   }
 
   function renderVoting() {
@@ -259,12 +264,46 @@
     $('voteStatus').textContent = state.voted ? 'Warte auf die Stimmen der anderen Spieler …' : 'Deine Wahl bleibt bis zur Auswertung geheim.';
   }
 
-  function renderGuess() {
+  async function renderGuess() {
     if (!state.secret) return;
     $('guessInfo').textContent = state.room?.result_text || 'Der Imposter hat noch eine letzte Chance.';
     const imp=!!state.secret.is_imposter;
     $('guessForm').classList.toggle('hidden',!imp);
     $('guessWaiting').classList.toggle('hidden',imp);
+    if (imp && state.room?.status === 'guess') {
+      try {
+        const { data, error } = await state.client.rpc('get_guess_pattern', { p_room_id: state.room.id });
+        if (error) throw error;
+        state.guessPattern = data || '';
+        $('guessInput').value = '';
+        renderGuessBoxes();
+        setTimeout(() => $('guessInput').focus(), 50);
+      } catch (e) { setError('roomError', friendlyError(e)); }
+    }
+  }
+
+  function guessSlots() { return Array.from(state.guessPattern || '').filter(ch => ch === '_').length; }
+  function renderGuessBoxes() {
+    const chars = Array.from(state.guessPattern || '');
+    const typed = Array.from(($('guessInput').value || '').replace(/[\s-]/g,'')).slice(0, guessSlots());
+    let i=0;
+    $('guessBoxes').innerHTML = chars.map(ch => {
+      if (ch === '_') {
+        const value = typed[i++] || '';
+        return `<span class="letter-box">${escapeHtml(value.toUpperCase())}</span>`;
+      }
+      if (ch === ' ') return '<span class="word-space"></span>';
+      return `<span class="given-char">${escapeHtml(ch)}</span>`;
+    }).join('');
+  }
+  function syncGuessBoxes() {
+    const input=$('guessInput');
+    input.value = Array.from(input.value.replace(/[\s-]/g,'')).slice(0,guessSlots()).join('');
+    renderGuessBoxes();
+  }
+  function assembledGuess() {
+    const typed=Array.from(($('guessInput').value||'').replace(/[\s-]/g,'')); let i=0;
+    return Array.from(state.guessPattern||'').map(ch=>ch==='_'?(typed[i++]||''):ch).join('');
   }
 
   function renderResult() {
@@ -291,7 +330,7 @@
     catch(e){setError('roomError',friendlyError(e));}
   }
   async function submitGuess(e) {
-    e.preventDefault(); const guess=$('guessInput').value.trim(); if(!guess)return;
+    e.preventDefault(); const guess=assembledGuess().trim(); if(!guess || ($('guessInput').value.length < guessSlots()))return;
     try { const {error}=await state.client.rpc('submit_guess',{p_room_id:state.room.id,p_guess:guess}); if(error) throw error; }
     catch(err){setError('roomError',friendlyError(err));}
   }
@@ -310,15 +349,23 @@
       c.setPointerCapture?.(e.pointerId); state.drawing=true; state.draftPoints=[pos(e)]; redrawCanvas();
     });
     c.addEventListener('pointermove',e=>{
-      if(!state.drawing)return; state.draftPoints.push(pos(e)); redrawCanvas(); broadcastDraft();
+      if(!state.drawing)return; const p=pos(e), last=state.draftPoints[state.draftPoints.length-1]; if(last && Math.hypot(p.x-last.x,p.y-last.y)<2.5)return; state.draftPoints.push(p); redrawCanvas(); broadcastDraft();
     });
     const finish=e=>{
       if(!state.drawing)return; state.drawing=false;
       if(state.draftPoints.length===1){const p=state.draftPoints[0];state.draftPoints.push({x:p.x+1,y:p.y+1});}
-      state.draftReady=true; $('submitLine').disabled=false; renderDrawing(); broadcastDraft(true);
+      state.draftReady=true; $('submitLine').disabled=false; $('redrawLine').disabled=false; renderDrawing(); broadcastDraft(true);
       try{c.releasePointerCapture?.(e.pointerId);}catch(_){}
     };
     c.addEventListener('pointerup',finish); c.addEventListener('pointercancel',finish);
+  }
+
+  async function resetDraft() {
+    if(!isMyTurn() || !state.draftReady) return;
+    state.draftPoints=[]; state.draftReady=false; state.drawing=false;
+    $('submitLine').disabled=true; $('redrawLine').disabled=true;
+    try { await state.roomChannel?.send({type:'broadcast',event:'drawing_end',payload:{user_id:state.user.id}}); } catch(_) {}
+    redrawCanvas(); renderDrawing();
   }
 
   async function broadcastDraft(force=false) {
@@ -346,7 +393,16 @@
       if(!Array.isArray(points)||points.length<2)return;
       ctx.strokeStyle=color || '#111827';
       ctx.beginPath();
-      points.forEach((p,i)=>i?ctx.lineTo(Number(p.x),Number(p.y)):ctx.moveTo(Number(p.x),Number(p.y)));
+      const pts=points.map(p=>({x:Number(p.x),y:Number(p.y)}));
+      ctx.moveTo(pts[0].x,pts[0].y);
+      if(pts.length===2){ctx.lineTo(pts[1].x,pts[1].y);}
+      else {
+        for(let i=1;i<pts.length-1;i++){
+          const mx=(pts[i].x+pts[i+1].x)/2, my=(pts[i].y+pts[i+1].y)/2;
+          ctx.quadraticCurveTo(pts[i].x,pts[i].y,mx,my);
+        }
+        ctx.lineTo(pts[pts.length-1].x,pts[pts.length-1].y);
+      }
       ctx.stroke();
     };
     state.strokes.forEach(s=>draw(s.points,playerColor(s.player_user_id)));
