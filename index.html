@@ -8,11 +8,20 @@
   <link rel="stylesheet" href="styles.css" />
 </head>
 <body>
+  <div class="cosmic-decor" aria-hidden="true">
+    <span class="doodle d1">★</span><span class="doodle d2">♛</span><span class="doodle d3">☾</span>
+    <span class="doodle d4">♬</span><span class="doodle d5">⚗</span><span class="doodle d6">✈</span>
+    <span class="doodle d7">♥</span><span class="doodle d8">◆</span><span class="doodle d9">☄</span>
+    <span class="doodle d10">✦</span><span class="doodle d11">⚡</span><span class="doodle d12">?</span>
+    <span class="pixel-star s1"></span><span class="pixel-star s2"></span><span class="pixel-star s3"></span><span class="pixel-star s4"></span>
+  </div>
   <div class="app-shell">
     <header class="topbar">
-      <div>
-        <div class="eyebrow">ONLINE PARTY GAME</div>
-        <h1>✏️ Scribble Imposter</h1>
+      <div class="brand-logo" aria-label="Scribble Imposter">
+        <span class="brand-pencil">✎</span>
+        <span class="brand-scribble">Scribble</span>
+        <span class="brand-imposter">IMPOSTER</span>
+        <span class="brand-line"></span>
       </div>
       <div id="connectionBadge" class="badge">Nicht verbunden</div>
     </header>
@@ -106,7 +115,10 @@
               </div>
               <div class="draw-actions">
                 <span id="drawHint" class="muted">Pro Zug genau eine durchgehende Linie.</span>
-                <button id="submitLine" type="button" disabled>Linie abschicken</button>
+                <div class="draw-buttons">
+                  <button id="redrawLine" type="button" class="danger-soft" disabled>↶ Neu zeichnen</button>
+                  <button id="submitLine" type="button" disabled>✓ Bestätigen</button>
+                </div>
               </div>
             </div>
 
@@ -127,8 +139,9 @@
                 <h2>Imposter entlarvt</h2>
                 <p id="guessInfo">Der Imposter hat noch eine letzte Chance.</p>
                 <form id="guessForm" class="guess-form hidden">
-                  <label for="guessInput">Welches Wort wurde gezeichnet?</label>
-                  <input id="guessInput" autocomplete="off" placeholder="Deine Antwort" />
+                  <label>Welches Wort wurde gezeichnet?</label>
+                  <div id="guessBoxes" class="guess-boxes" aria-label="Wort eingeben"></div>
+                  <input id="guessInput" class="guess-hidden-input" autocomplete="off" autocapitalize="none" spellcheck="false" />
                   <button type="submit">Wort raten</button>
                 </form>
                 <p id="guessWaiting" class="muted hidden">Der Imposter überlegt gerade …</p>
